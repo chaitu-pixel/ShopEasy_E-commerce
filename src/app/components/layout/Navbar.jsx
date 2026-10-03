@@ -54,17 +54,17 @@ export default function Navbar() {
             </a>
 
             <a
-              href="/wishlist"
-              className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-blue-50 hover:text-blue-600"
-            >
-              Wishlist
-            </a>
-
-            <a
               href="#"
               className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-blue-50 hover:text-blue-600"
             >
               Deals
+            </a>
+
+            <a
+              href="/profile"
+              className="rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-600 transition hover:bg-blue-50 hover:text-blue-600"
+            >
+              Profile
             </a>
 
           </nav>
