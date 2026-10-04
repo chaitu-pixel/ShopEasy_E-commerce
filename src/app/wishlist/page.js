@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect} from "react";
+import toast from "react-hot-toast";
 import {
   ArrowLeft,
   Heart,
@@ -45,10 +46,21 @@ export default function WishlistPage() {
     },
   ]);
   const removeFromWishlist = (id) => {
-    setWishlistItems((items) => items.filter((item) => item.id !== id));
-  };
+  setWishlistItems((items) => {
+    const updatedWishlist = items.filter((item) => item.id !== id);
+
+    localStorage.setItem(
+      "wishlistItems",
+      JSON.stringify(updatedWishlist)
+    );
+
+    return updatedWishlist;
+  });
+
+  toast.success("Removed from wishlist!");
+};
   const moveToCart = (item) => {
-  const savedCart = localStorage.getItem("cartItems");
+  const savedCart = localStorage.getItem("cart");
 
   const cartItems = savedCart ? JSON.parse(savedCart) : [];
 
@@ -65,9 +77,11 @@ export default function WishlistPage() {
     });
   }
 
-  localStorage.setItem("cartItems", JSON.stringify(cartItems));
+  localStorage.setItem("cart", JSON.stringify(cartItems));
 
   removeFromWishlist(item.id);
+
+  toast.success("Product moved to cart!");
 };
   useEffect(() => {
   const savedWishlist = localStorage.getItem("wishlistItems");

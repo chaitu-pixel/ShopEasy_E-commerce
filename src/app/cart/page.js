@@ -1,7 +1,8 @@
-
 "use client";
 
-import { useState,useEffect } from "react";
+import toast from "react-hot-toast";
+import { useState, useEffect } from "react";
+import { getCartItems, saveCartItems } from "../utils/cartUtils";
 import Link from "next/link";
 import {
   Minus,
@@ -15,80 +16,52 @@ import {
 } from "lucide-react";
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState([
-    {
-      id: 1,
-      name: "Premium Wireless Headphones",
-      category: "Electronics",
-      price: 2499,
-      oldPrice: 3999,
-      quantity: 1,
-      image: "🎧",
-    },
-    {
-      id: 2,
-      name: "Classic Casual Sneakers",
-      category: "Fashion",
-      price: 1899,
-      oldPrice: 2999,
-      quantity: 2,
-      image: "👟",
-    },
-    {
-      id: 3,
-      name: "Smart Watch Series X",
-      category: "Electronics",
-      price: 3299,
-      oldPrice: 4999,
-      quantity: 1,
-      image: "⌚",
-    },
-  ]);
+  const [cartItems, setCartItems] = useState([]);
+
   useEffect(() => {
-  const savedCart = localStorage.getItem("cartItems");
-
-  if (savedCart) {
-    setCartItems(JSON.parse(savedCart));
-  }
-}, []);
-
-useEffect(() => {
-  localStorage.setItem("cartItems", JSON.stringify(cartItems));
-}, [cartItems]);
+    const storedCart = getCartItems();
+    setCartItems(storedCart);
+  }, []);
 
   // Update product quantity
   const updateQuantity = (id, change) => {
-    setCartItems((items) =>
-      items.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              quantity: Math.max(1, item.quantity + change),
-            }
-          : item
-      )
-    );
+    const updatedCart = cartItems.map((item) => {
+      if (item.id === id) {
+        const newQuantity = item.quantity + change;
+
+        return {
+          ...item,
+          quantity: Math.max(1, newQuantity),
+        };
+      }
+
+      return item;
+    });
+
+    setCartItems(updatedCart);
+    saveCartItems(updatedCart);
   };
 
   // Remove product
   const removeItem = (id) => {
-    setCartItems((items) =>
-      items.filter((item) => item.id !== id)
-    );
+    const updatedCart = cartItems.filter((item) => item.id !== id);
+
+    setCartItems(updatedCart);
+    saveCartItems(updatedCart);
+
+    toast.success("Item removed from cart!");
   };
 
   // Calculate subtotal
   const subtotal = cartItems.reduce(
     (total, item) => total + item.price * item.quantity,
-    0
+    0,
   );
 
   // Discount
   const discount = cartItems.reduce(
-    (total, item) =>
-      total +
-      (item.oldPrice - item.price) * item.quantity,
-    0
+    (total, item) => total + (item.oldPrice - item.price) * item.quantity,
+    0,
   );
 
   // Delivery charge
@@ -99,11 +72,9 @@ useEffect(() => {
 
   return (
     <main className="min-h-screen bg-slate-50">
-
       {/* Page Header */}
       <section className="border-b border-slate-200 bg-white">
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-
           <Link
             href="/products"
             className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-indigo-600"
@@ -136,7 +107,6 @@ useEffect(() => {
 
       {/* Cart Content */}
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 lg:py-12">
-
         {cartItems.length === 0 ? (
           /* Empty Cart */
           <div className="rounded-3xl border border-slate-200 bg-white px-6 py-16 text-center shadow-sm">
@@ -161,27 +131,26 @@ useEffect(() => {
           </div>
         ) : (
           <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
-
             {/* Products */}
             <div className="space-y-5">
-
               {cartItems.map((item) => (
                 <article
                   key={item.id}
                   className="group rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-6"
                 >
                   <div className="flex gap-4 sm:gap-6">
-
                     {/* Product Image */}
-                    <div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-5xl sm:h-32 sm:w-32">
-                      {item.image}
+                    <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 sm:h-32 sm:w-32">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="h-full w-full object-contain p-3"
+                      />
                     </div>
 
                     {/* Product Details */}
                     <div className="min-w-0 flex-1">
-
                       <div className="flex items-start justify-between gap-3">
-
                         <div>
                           <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">
                             {item.category}
@@ -201,7 +170,6 @@ useEffect(() => {
                         >
                           <Trash2 size={18} />
                         </button>
-
                       </div>
 
                       {/* Price */}
@@ -217,15 +185,11 @@ useEffect(() => {
 
                       {/* Bottom Row */}
                       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-
                         {/* Quantity */}
                         <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50">
-
                           <button
                             type="button"
-                            onClick={() =>
-                              updateQuantity(item.id, -1)
-                            }
+                            onClick={() => updateQuantity(item.id, -1)}
                             className="flex h-9 w-9 items-center justify-center text-slate-500 transition hover:bg-white hover:text-indigo-600"
                             aria-label="Decrease quantity"
                           >
@@ -238,25 +202,19 @@ useEffect(() => {
 
                           <button
                             type="button"
-                            onClick={() =>
-                              updateQuantity(item.id, 1)
-                            }
+                            onClick={() => updateQuantity(item.id, 1)}
                             className="flex h-9 w-9 items-center justify-center text-slate-500 transition hover:bg-white hover:text-indigo-600"
                             aria-label="Increase quantity"
                           >
                             <Plus size={15} />
                           </button>
-
                         </div>
 
                         {/* Item Total */}
                         <p className="text-lg font-black text-slate-900">
                           ₹
-                          {(
-                            item.price * item.quantity
-                          ).toLocaleString("en-IN")}
+                          {(item.price * item.quantity).toLocaleString("en-IN")}
                         </p>
-
                       </div>
                     </div>
                   </div>
@@ -265,7 +223,6 @@ useEffect(() => {
 
               {/* Benefits */}
               <div className="grid gap-4 sm:grid-cols-3">
-
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <Truck className="text-indigo-600" size={22} />
                   <p className="mt-3 text-sm font-bold text-slate-900">
@@ -295,25 +252,19 @@ useEffect(() => {
                     Best prices guaranteed
                   </p>
                 </div>
-
               </div>
             </div>
 
             {/* Order Summary */}
             <aside className="lg:sticky lg:top-6 lg:h-fit">
-
               <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-7">
-
                 <h2 className="text-xl font-black text-slate-900">
                   Order Summary
                 </h2>
 
                 <div className="mt-6 space-y-4">
-
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">
-                      Subtotal
-                    </span>
+                    <span className="text-slate-500">Subtotal</span>
 
                     <span className="font-semibold text-slate-900">
                       ₹{subtotal.toLocaleString("en-IN")}
@@ -321,9 +272,7 @@ useEffect(() => {
                   </div>
 
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">
-                      Discount
-                    </span>
+                    <span className="text-slate-500">Discount</span>
 
                     <span className="font-semibold text-green-600">
                       -₹{discount.toLocaleString("en-IN")}
@@ -331,23 +280,17 @@ useEffect(() => {
                   </div>
 
                   <div className="flex justify-between text-sm">
-                    <span className="text-slate-500">
-                      Delivery
-                    </span>
+                    <span className="text-slate-500">Delivery</span>
 
                     <span className="font-semibold text-slate-900">
-                      {delivery === 0
-                        ? "FREE"
-                        : `₹${delivery}`}
+                      {delivery === 0 ? "FREE" : `₹${delivery}`}
                     </span>
                   </div>
 
                   <div className="border-t border-dashed border-slate-200 pt-4">
                     <div className="flex items-end justify-between">
                       <div>
-                        <p className="text-sm text-slate-500">
-                          Total
-                        </p>
+                        <p className="text-sm text-slate-500">Total</p>
 
                         <p className="mt-1 text-2xl font-black text-slate-900">
                           ₹{total.toLocaleString("en-IN")}
@@ -355,12 +298,10 @@ useEffect(() => {
                       </div>
 
                       <span className="rounded-full bg-green-50 px-3 py-1 text-xs font-bold text-green-600">
-                        Saved ₹
-                        {discount.toLocaleString("en-IN")}
+                        Saved ₹{discount.toLocaleString("en-IN")}
                       </span>
                     </div>
                   </div>
-
                 </div>
 
                 {/* Checkout */}
@@ -379,10 +320,8 @@ useEffect(() => {
                 </Link>
 
                 <p className="mt-5 text-center text-xs leading-5 text-slate-400">
-                  Taxes and final delivery charges are calculated
-                  at checkout.
+                  Taxes and final delivery charges are calculated at checkout.
                 </p>
-
               </div>
             </aside>
           </div>
@@ -391,4 +330,3 @@ useEffect(() => {
     </main>
   );
 }
-
