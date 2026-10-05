@@ -1,0 +1,98 @@
+export const adminProducts = [
+  {
+    id: 1,
+    name: "Premium Wireless Headphones",
+    category: "Electronics",
+    price: 2499,
+    stock: 42,
+    rating: 4.8,
+    status: "Active",
+    image: "🎧",
+    description:
+      "Premium wireless headphones with high-quality sound and comfortable design.",
+  },
+  {
+    id: 2,
+    name: "Smart Watch Series X",
+    category: "Electronics",
+    price: 3299,
+    stock: 18,
+    rating: 4.9,
+    status: "Active",
+    image: "⌚",
+    description:
+      "Smart watch with fitness tracking, notifications and modern design.",
+  },
+  {
+    id: 3,
+    name: "Classic Casual Sneakers",
+    category: "Fashion",
+    price: 1899,
+    stock: 25,
+    rating: 4.7,
+    status: "Active",
+    image: "👟",
+    description:
+      "Comfortable casual sneakers suitable for everyday activities.",
+  },
+  {
+    id: 4,
+    name: "Everyday Skincare Kit",
+    category: "Beauty",
+    price: 1299,
+    stock: 9,
+    rating: 4.6,
+    status: "Low Stock",
+    image: "🧴",
+    description:
+      "Daily skincare essentials for a simple and effective routine.",
+  },
+  {
+    id: 5,
+    name: "Modern Table Lamp",
+    category: "Home",
+    price: 999,
+    stock: 0,
+    rating: 4.5,
+    status: "Out of Stock",
+    image: "💡",
+    description:
+      "Minimal modern table lamp designed for bedrooms and workspaces.",
+  },
+  {
+    id: 6,
+    name: "Professional Football",
+    category: "Sports",
+    price: 799,
+    stock: 31,
+    rating: 4.7,
+    status: "Active",
+    image: "⚽",
+    description:
+      "Professional-quality football suitable for training and matches.",
+  },
+  {
+    id: 7,
+    name: "Organic Grocery Basket",
+    category: "Groceries",
+    price: 699,
+    stock: 16,
+    rating: 4.6,
+    status: "Active",
+    image: "🛒",
+    description:
+      "Fresh organic grocery essentials packed for everyday use.",
+  },
+  {
+    id: 8,
+    name: "Minimal Leather Backpack",
+    category: "Fashion",
+    price: 2199,
+    stock: 6,
+    rating: 4.8,
+    status: "Low Stock",
+    image: "🎒",
+    description:
+      "Minimal leather backpack with a spacious and practical design.",
+  },
+];
