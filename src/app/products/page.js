@@ -221,10 +221,7 @@ function ProductsContent() {
       const matchesCategory =
         selectedCategory === "All Products" ||
         productCat === selectedCategory.toLowerCase() ||
-        allowedCategories.some((c) => c.toLowerCase() === productCat) ||
-        (selectedCategory === "Electronics" && ["electronics", "smartphones", "laptops", "tablets"].some((c) => productCat.includes(c))) ||
-        (selectedCategory === "Fashion" && ["fashion", "mens-shirts", "mens-shoes", "tops", "womens-bags", "womens-dresses", "womens-jewellery", "womens-shoes", "womens-watches", "sunglasses"].some((c) => productCat.includes(c))) ||
-        (selectedCategory === "Sports" && ["sports", "sports-accessories", "fitness"].includes(productCat));
+        allowedCategories.some((category) => category.toLowerCase() === productCat);
 
       // Minimum price
       const matchesMinPrice =
