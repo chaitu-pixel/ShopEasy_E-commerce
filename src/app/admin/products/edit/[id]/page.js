@@ -2,6 +2,8 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
+import Link from "next/link";
 import {
   ArrowLeft,
   Package,
@@ -10,48 +12,65 @@ import {
   IndianRupee,
   Boxes,
   Star,
+  CheckCircle2,
 } from "lucide-react";
 import toast from "react-hot-toast";
-
-import { adminProducts } from "../../../../utils/adminProductData";
+import { getStoredProducts, updateStoredProduct } from "@/utils/storeData";
+import { useStoreSnapshot } from "@/hooks/useStoreSnapshot";
 
 export default function EditProductPage() {
   const router = useRouter();
   const params = useParams();
-
   const productId = Number(params.id);
 
-  const product = adminProducts.find(
-    (item) => item.id === productId
-  );
-
-  const [formData, setFormData] = useState(() => {
-    if (!product) {
-      return {
-        name: "",
+  const products = useStoreSnapshot(getStoredProducts, null, []);
+  const product = products?.find((item) => item.id === productId) || null;
+  const loading = products === null;
+  const [editedFormData, setEditedFormData] = useState(null);
+  const initialFormData = product
+    ? {
+        title: product.name || product.title || "",
+        category: product.category || "Electronics",
+        price: product.price || "",
+        oldPrice: product.oldPrice || "",
+        stock: product.stock !== undefined ? String(product.stock) : "0",
+        rating: product.rating !== undefined ? String(product.rating) : "4.5",
+        description: product.description || "",
+        image: product.image || "",
+        sku: product.sku || `SKU-${product.id}`,
+        status: product.status || "Active",
+      }
+    : {
+        title: "",
         category: "",
         price: "",
+        oldPrice: "",
         stock: "",
         rating: "",
         description: "",
         image: "",
+        sku: "",
         status: "Active",
       };
-    }
-
-    return {
-      name: product.name,
-      category: product.category,
-      price: product.price,
-      stock: product.stock,
-      rating: product.rating,
-      description: product.description,
-      image: product.image,
-      status: product.status,
-    };
-  });
-
+  const formData =
+    editedFormData?.productId === productId
+      ? editedFormData.values
+      : initialFormData;
   const [errors, setErrors] = useState({});
+
+  const setFormData = (update) => {
+    setEditedFormData((previous) => {
+      const current =
+        previous?.productId === productId
+          ? previous.values
+          : initialFormData;
+
+      return {
+        productId,
+        values: typeof update === "function" ? update(current) : update,
+      };
+    });
+  };
 
   const categories = [
     "Electronics",
@@ -62,461 +81,344 @@ export default function EditProductPage() {
     "Groceries",
   ];
 
+  if (loading) {
+    return <div className="p-8 text-center text-xs text-slate-400">Loading product...</div>;
+  }
+
   if (!product) {
     return (
-      <div className="min-h-screen bg-slate-100 p-6">
-        <div className="mx-auto max-w-3xl rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
-          <Package
-            size={48}
-            className="mx-auto text-slate-300"
-          />
-
-          <h1 className="mt-4 text-2xl font-bold text-slate-900">
-            Product Not Found
-          </h1>
-
-          <p className="mt-2 text-sm text-slate-500">
-            The product you are trying to edit does not exist.
-          </p>
-
-          <button
-            onClick={() => router.push("/admin/products")}
-            className="mt-6 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
-          >
-            Back to Products
-          </button>
-        </div>
+      <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center">
+        <Package size={48} className="mx-auto text-slate-300" />
+        <h2 className="mt-4 text-xl font-black text-slate-900">Product Not Found</h2>
+        <p className="mt-1 text-xs text-slate-400">
+          The requested product ID #{productId} could not be found.
+        </p>
+        <Link
+          href="/admin/products"
+          className="mt-6 inline-flex rounded-xl bg-slate-900 px-5 py-2.5 text-xs font-bold text-white"
+        >
+          Return to Products
+        </Link>
       </div>
     );
   }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-
-    setFormData((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-
+    setFormData((prev) => ({ ...prev, [name]: value }));
     if (errors[name]) {
-      setErrors((previous) => ({
-        ...previous,
-        [name]: "",
-      }));
+      setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = "Product name is required";
-    }
-
-    if (!formData.category) {
-      newErrors.category = "Please select a category";
-    }
-
-    if (!formData.price) {
-      newErrors.price = "Price is required";
-    } else if (Number(formData.price) <= 0) {
-      newErrors.price = "Price must be greater than 0";
-    }
-
-    if (formData.stock === "") {
-      newErrors.stock = "Stock quantity is required";
-    } else if (Number(formData.stock) < 0) {
-      newErrors.stock = "Stock cannot be negative";
-    }
-
-    if (!formData.rating) {
-      newErrors.rating = "Rating is required";
-    } else if (
-      Number(formData.rating) < 1 ||
-      Number(formData.rating) > 5
-    ) {
-      newErrors.rating = "Rating must be between 1 and 5";
-    }
-
-    if (!formData.description.trim()) {
-      newErrors.description = "Description is required";
-    }
-
-    if (!formData.image.trim()) {
-      newErrors.image = "Product image is required";
-    }
-
-    setErrors(newErrors);
-
-    return Object.keys(newErrors).length === 0;
+  const validate = () => {
+    const errs = {};
+    if (!formData.title.trim()) errs.title = "Product title is required.";
+    if (!formData.price || Number(formData.price) <= 0)
+      errs.price = "Valid price in ₹ is required.";
+    if (formData.stock === "" || Number(formData.stock) < 0)
+      errs.stock = "Valid stock count is required.";
+    if (!formData.description.trim())
+      errs.description = "Product description is required.";
+    setErrors(errs);
+    return Object.keys(errs).length === 0;
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
-    if (!validateForm()) {
-      toast.error("Please fix the errors in the form");
+    if (!validate()) {
+      toast.error("Please correct the form fields.");
       return;
     }
 
-    console.log("Updated Product:", {
-      id: productId,
-      ...formData,
+    const updated = updateStoredProduct(productId, {
+      name: formData.title,
+      title: formData.title,
+      category: formData.category,
+      price: Number(formData.price),
+      oldPrice: formData.oldPrice ? Number(formData.oldPrice) : undefined,
+      stock: Number(formData.stock),
+      rating: Number(formData.rating) || product.rating,
+      description: formData.description,
+      image: formData.image,
+      sku: formData.sku,
+      status: formData.status,
     });
 
-    toast.success("Product updated successfully!");
-
-    setTimeout(() => {
-      router.push("/admin/products");
-    }, 1000);
+    toast.success(`"${updated.name}" updated successfully!`);
+    router.push("/admin/products");
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 p-4 sm:p-6 lg:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <button
-          onClick={() => router.push("/admin/products")}
-          className="mb-4 flex items-center gap-2 text-sm font-medium text-slate-500 transition hover:text-violet-600"
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div>
+        <Link
+          href="/admin/products"
+          className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-indigo-600 transition mb-2"
         >
-          <ArrowLeft size={16} />
-          Back to Products
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-violet-100 text-violet-600">
-            <Package size={23} />
-          </div>
-
+          <ArrowLeft size={14} />
+          <span>Back to Products</span>
+        </Link>
+        <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-violet-600">
-              Product #{productId}
-            </p>
-
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-              Edit Product
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+              Edit Product #{productId}
             </h1>
-
-            <p className="mt-1 text-sm text-slate-500">
-              Update product information, pricing and inventory.
+            <p className="mt-0.5 text-xs sm:text-sm text-slate-500">
+              Update pricing, inventory levels, and product descriptions.
             </p>
           </div>
+          <span className="rounded-full bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700">
+            {formData.category}
+          </span>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="grid gap-6 xl:grid-cols-3">
-          {/* Main */}
-          <div className="space-y-6 xl:col-span-2">
-            {/* Product Information */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-6">
-                <h2 className="text-lg font-bold text-slate-900">
-                  Product Information
-                </h2>
+      <form onSubmit={handleSubmit} className="grid gap-6 xl:grid-cols-3">
+        {/* Core fields */}
+        <div className="space-y-6 xl:col-span-2">
+          {/* General Information */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
+            <h2 className="text-base font-black text-slate-900">
+              Product Details
+            </h2>
 
-                <p className="mt-1 text-sm text-slate-400">
-                  Update the basic product information.
-                </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Product Title / Name *
+              </label>
+              <input
+                type="text"
+                name="title"
+                value={formData.title}
+                onChange={handleChange}
+                className="w-full h-11 rounded-xl border border-slate-200 px-4 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500"
+              />
+              {errors.title && (
+                <p className="mt-1 text-xs text-rose-500 font-semibold">{errors.title}</p>
+              )}
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Category *
+                </label>
+                <select
+                  name="category"
+                  value={formData.category}
+                  onChange={handleChange}
+                  className="w-full h-11 rounded-xl border border-slate-200 bg-white px-3 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500"
+                >
+                  {categories.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="space-y-5">
-                <FormField
-                  label="Product Name"
-                  required
-                  error={errors.name}
-                >
-                  <input
-                    type="text"
-                    name="name"
-                    value={formData.name}
-                    onChange={handleChange}
-                    className={inputClass(errors.name)}
-                  />
-                </FormField>
-
-                <FormField
-                  label="Category"
-                  required
-                  error={errors.category}
-                >
-                  <select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    className={inputClass(errors.category)}
-                  >
-                    <option value="">
-                      Select a category
-                    </option>
-
-                    {categories.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-
-                <FormField
-                  label="Description"
-                  required
-                  error={errors.description}
-                >
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleChange}
-                    rows={6}
-                    className={`${inputClass(
-                      errors.description
-                    )} h-auto resize-none py-3`}
-                  />
-                </FormField>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  SKU Identifier
+                </label>
+                <input
+                  type="text"
+                  name="sku"
+                  value={formData.sku}
+                  onChange={handleChange}
+                  className="w-full h-11 rounded-xl border border-slate-200 px-4 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500"
+                />
               </div>
             </div>
 
-            {/* Pricing */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <div className="mb-6">
-                <h2 className="text-lg font-bold text-slate-900">
-                  Pricing & Inventory
-                </h2>
-
-                <p className="mt-1 text-sm text-slate-400">
-                  Update pricing and available stock.
-                </p>
-              </div>
-
-              <div className="grid gap-5 md:grid-cols-3">
-                <FormField
-                  label="Price"
-                  required
-                  error={errors.price}
-                >
-                  <div className="relative">
-                    <IndianRupee
-                      size={17}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-
-                    <input
-                      type="number"
-                      name="price"
-                      value={formData.price}
-                      onChange={handleChange}
-                      min="0"
-                      className={`${inputClass(
-                        errors.price
-                      )} pl-10`}
-                    />
-                  </div>
-                </FormField>
-
-                <FormField
-                  label="Stock"
-                  required
-                  error={errors.stock}
-                >
-                  <div className="relative">
-                    <Boxes
-                      size={17}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                    />
-
-                    <input
-                      type="number"
-                      name="stock"
-                      value={formData.stock}
-                      onChange={handleChange}
-                      min="0"
-                      className={`${inputClass(
-                        errors.stock
-                      )} pl-10`}
-                    />
-                  </div>
-                </FormField>
-
-                <FormField
-                  label="Rating"
-                  required
-                  error={errors.rating}
-                >
-                  <div className="relative">
-                    <Star
-                      size={17}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-400"
-                    />
-
-                    <input
-                      type="number"
-                      name="rating"
-                      value={formData.rating}
-                      onChange={handleChange}
-                      min="1"
-                      max="5"
-                      step="0.1"
-                      className={`${inputClass(
-                        errors.rating
-                      )} pl-10`}
-                    />
-                  </div>
-                </FormField>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Description *
+              </label>
+              <textarea
+                name="description"
+                rows={5}
+                value={formData.description}
+                onChange={handleChange}
+                className="w-full rounded-xl border border-slate-200 p-4 text-xs font-medium text-slate-900 outline-none focus:border-indigo-500"
+              />
+              {errors.description && (
+                <p className="mt-1 text-xs text-rose-500 font-semibold">{errors.description}</p>
+              )}
             </div>
           </div>
 
-          {/* Right */}
-          <div className="space-y-6">
-            {/* Image */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <h2 className="text-lg font-bold text-slate-900">
-                Product Image
-              </h2>
+          {/* Pricing & Inventory */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
+            <h2 className="text-base font-black text-slate-900">
+              Pricing & Stock Levels
+            </h2>
 
-              <p className="mt-1 text-sm text-slate-400">
-                Update the product image.
-              </p>
-
-              <div className="mt-5">
-                <FormField
-                  label="Image URL / Emoji"
-                  required
-                  error={errors.image}
-                >
-                  <div className="relative">
-                    <ImageIcon
-                      size={17}
-                      className="absolute left-3 top-3 text-slate-400"
-                    />
-
-                    <textarea
-                      name="image"
-                      value={formData.image}
-                      onChange={handleChange}
-                      rows={3}
-                      className={`${inputClass(
-                        errors.image
-                      )} h-auto resize-none pl-10 py-3`}
-                    />
-                  </div>
-                </FormField>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Price (₹) *
+                </label>
+                <div className="relative">
+                  <IndianRupee
+                    size={15}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="number"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleChange}
+                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-4 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                </div>
+                {errors.price && (
+                  <p className="mt-1 text-xs text-rose-500 font-semibold">{errors.price}</p>
+                )}
               </div>
 
-              <div className="mt-5 flex h-48 items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-slate-50">
-                {formData.image.startsWith("http") ? (
-                  <img
-                    src={formData.image}
-                    alt={formData.name}
-                    className="h-full w-full object-contain p-5"
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Compare-At Price (₹)
+                </label>
+                <div className="relative">
+                  <IndianRupee
+                    size={15}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
                   />
-                ) : (
-                  <span className="text-6xl">
-                    {formData.image || "📦"}
-                  </span>
+                  <input
+                    type="number"
+                    name="oldPrice"
+                    value={formData.oldPrice}
+                    onChange={handleChange}
+                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-4 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Stock Units Available *
+                </label>
+                <div className="relative">
+                  <Boxes
+                    size={15}
+                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400"
+                  />
+                  <input
+                    type="number"
+                    name="stock"
+                    value={formData.stock}
+                    onChange={handleChange}
+                    className="w-full h-11 rounded-xl border border-slate-200 pl-9 pr-4 text-xs font-bold text-slate-900 outline-none focus:border-indigo-500"
+                  />
+                </div>
+                {errors.stock && (
+                  <p className="mt-1 text-xs text-rose-500 font-semibold">{errors.stock}</p>
                 )}
               </div>
             </div>
+          </div>
+        </div>
 
-            {/* Status */}
-            <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
-              <h2 className="text-lg font-bold text-slate-900">
-                Product Status
-              </h2>
+        {/* Right column */}
+        <div className="space-y-6">
+          {/* Image */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-4">
+            <h2 className="text-base font-black text-slate-900">
+              Product Image
+            </h2>
 
-              <div className="mt-5 space-y-3">
-                {["Active", "Inactive"].map((status) => (
-                  <label
-                    key={status}
-                    className={`flex cursor-pointer items-center justify-between rounded-xl border p-4 transition ${
-                      formData.status === status
-                        ? "border-violet-300 bg-violet-50"
-                        : "border-slate-200 hover:bg-slate-50"
-                    }`}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">
-                        {status}
-                      </p>
-
-                      <p className="mt-1 text-xs text-slate-400">
-                        {status === "Active"
-                          ? "Visible to customers"
-                          : "Hidden from customers"}
-                      </p>
-                    </div>
-
-                    <input
-                      type="radio"
-                      name="status"
-                      value={status}
-                      checked={formData.status === status}
-                      onChange={handleChange}
-                      className="h-4 w-4 accent-violet-600"
-                    />
-                  </label>
-                ))}
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                Image Web URL
+              </label>
+              <input
+                type="text"
+                name="image"
+                value={formData.image}
+                onChange={handleChange}
+                className="w-full h-10.5 rounded-xl border border-slate-200 px-3.5 text-xs text-slate-900 outline-none focus:border-indigo-500"
+              />
             </div>
 
-            {/* Actions */}
-            <div className="flex flex-col gap-3">
-              <button
-                type="button"
-                onClick={() =>
-                  router.push("/admin/products")
-                }
-                className="flex items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-800"
-              >
-                <Save size={18} />
-                Save Changes
-              </button>
+            <div className="flex h-44 w-full items-center justify-center overflow-hidden rounded-xl border border-dashed border-slate-200 bg-slate-50 p-3">
+              {formData.image ? (
+                <Image
+                  src={formData.image}
+                  alt={formData.title}
+                  width={500}
+                  height={500}
+                  unoptimized
+                  className="h-full w-full object-contain"
+                />
+              ) : (
+                <div className="text-center text-slate-400 text-xs">
+                  <ImageIcon size={28} className="mx-auto mb-1.5 text-slate-300" />
+                  No Image Preview
+                </div>
+              )}
             </div>
+          </div>
+
+          {/* Status */}
+          <div className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-xs space-y-3">
+            <h2 className="text-base font-black text-slate-900">
+              Product Status
+            </h2>
+
+            <div className="space-y-2">
+              {["Active", "Inactive"].map((st) => (
+                <label
+                  key={st}
+                  className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition ${
+                    formData.status === st
+                      ? "border-indigo-300 bg-indigo-50/50"
+                      : "border-slate-200 hover:bg-slate-50"
+                  }`}
+                >
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{st}</p>
+                    <p className="text-[10px] text-slate-400">
+                      {st === "Active"
+                        ? "Visible to customers"
+                        : "Hidden from customer catalog"}
+                    </p>
+                  </div>
+                  <input
+                    type="radio"
+                    name="status"
+                    value={st}
+                    checked={formData.status === st}
+                    onChange={handleChange}
+                    className="h-4 w-4 accent-indigo-600"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex flex-col gap-2.5">
+            <button
+              type="submit"
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-3.5 text-xs font-bold text-white shadow-lg shadow-slate-900/10 hover:bg-indigo-600 transition"
+            >
+              <Save size={16} />
+              <span>Save Changes</span>
+            </button>
+
+            <Link
+              href="/admin/products"
+              className="flex w-full items-center justify-center rounded-xl border border-slate-200 bg-white py-3 text-xs font-bold text-slate-700 hover:bg-slate-50 transition"
+            >
+              Cancel
+            </Link>
           </div>
         </div>
       </form>
     </div>
   );
-}
-
-function FormField({
-  label,
-  required,
-  error,
-  children,
-}) {
-  return (
-    <div>
-      <label className="mb-2 block text-sm font-semibold text-slate-700">
-        {label}
-
-        {required && (
-          <span className="ml-1 text-red-500">*</span>
-        )}
-      </label>
-
-      {children}
-
-      {error && (
-        <p className="mt-1.5 text-xs font-medium text-red-500">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function inputClass(error) {
-  return `h-11 w-full rounded-xl border ${
-    error
-      ? "border-red-300 focus:border-red-400 focus:ring-red-100"
-      : "border-slate-200 focus:border-violet-400 focus:ring-violet-100"
-  } bg-slate-50 px-4 text-sm text-slate-700 outline-none transition focus:bg-white focus:ring-4`;
 }

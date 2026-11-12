@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
+import Image from "next/image";
 import {
   ArrowLeft,
   Check,
@@ -16,11 +17,14 @@ import {
   Star,
 } from "lucide-react";
 import Link from "next/link";
-import { getProductById } from "../../services/productService";
-import { getCartItems, saveCartItems } from "../../utils/cartUtils";
+import { getProductById } from "@/services/productService";
+import { getAuthUser } from "@/utils/storeData";
+import { getCartItems, saveCartItems, getWishlistItems, saveWishlistItems } from "@/utils/cartUtils";
+import { useRouter } from "next/navigation";
 
 export default function ProductDetailsPage() {
   const params = useParams();
+  const router = useRouter();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -28,6 +32,7 @@ export default function ProductDetailsPage() {
   const [quantity, setQuantity] = useState(1);
   const [isWishlisted, setIsWishlisted] = useState(false);
 
+  // Fetch product
   useEffect(() => {
     const fetchProduct = async () => {
       try {
@@ -49,16 +54,83 @@ export default function ProductDetailsPage() {
     }
   }, [params.id]);
 
+  // Sync the signed-in customer's wishlist state.
+  useEffect(() => {
+    if (!product) return;
+    const syncWishlist = () => {
+      setIsWishlisted(getWishlistItems().some((item) => String(item.id) === String(product.id)));
+    };
+    syncWishlist();
+    window.addEventListener("wishlist_changed", syncWishlist);
+    window.addEventListener("auth_changed", syncWishlist);
+    return () => {
+      window.removeEventListener("wishlist_changed", syncWishlist);
+      window.removeEventListener("auth_changed", syncWishlist);
+    };
+  }, [product]);
+
   const increaseQuantity = () => {
     if (quantity < (product?.stock || 1)) {
-      setQuantity(quantity + 1);
+      setQuantity((previous) => previous + 1);
     }
   };
 
   const decreaseQuantity = () => {
     if (quantity > 1) {
-      setQuantity(quantity - 1);
+      setQuantity((previous) => previous - 1);
     }
+  };
+
+  const requireCustomerLogin = () => {
+    const user = getAuthUser();
+    if (user?.role === "user") return true;
+    toast.error("Please login as a customer first.");
+    router.push(`/login/customer?next=${encodeURIComponent(window.location.pathname)}`);
+    return false;
+  };
+
+  // Add / Remove Wishlist
+  const handleWishlist = () => {
+    if (!product || !requireCustomerLogin()) return;
+    const wishlist = getWishlistItems();
+    const exists = wishlist.some((item) => String(item.id) === String(product.id));
+    if (exists) {
+      saveWishlistItems(wishlist.filter((item) => String(item.id) !== String(product.id)));
+      setIsWishlisted(false);
+      toast.success("Product removed from wishlist!");
+      return;
+    }
+    saveWishlistItems([...wishlist, {
+      ...product,
+      name: product.title,
+      image: product.thumbnail || product.images?.[0] || "",
+      reviews: Array.isArray(product.reviews) ? product.reviews.length : product.reviews || 0,
+    }]);
+    setIsWishlisted(true);
+    toast.success("Product added to wishlist!");
+  };
+
+  // Add product to the signed-in customer's cart.
+  const handleAddToCart = () => {
+    if (!product || !requireCustomerLogin()) return;
+    const cartItems = getCartItems();
+    const existing = cartItems.find((item) => String(item.id) === String(product.id));
+    const image = product.thumbnail || product.images?.[0] || "";
+    const updated = existing
+      ? cartItems.map((item) => String(item.id) === String(product.id)
+          ? { ...item, quantity: Number(item.quantity || 1) + quantity, image: item.image || image }
+          : item)
+      : [...cartItems, {
+          id: product.id,
+          name: product.title,
+          category: product.category,
+          price: product.price,
+          oldPrice: product.price,
+          quantity,
+          image,
+        }];
+    saveCartItems(updated);
+    toast.success("Product added to cart!");
   };
 
   if (loading) {
@@ -127,36 +199,11 @@ export default function ProductDetailsPage() {
     );
   }
 
-  const discount = Math.round(product.discountPercentage || 0);
-
-  const finalPrice =
-    product.price * quantity;
-
-  const handleAddToCart = () => {
-  const cartItems = getCartItems();
-
-  const existingItem = cartItems.find(
-    (item) => item.id === product.id
+  const discount = Math.round(
+    product.discountPercentage || 0
   );
 
-  if (existingItem) {
-    existingItem.quantity += quantity;
-  } else {
-    cartItems.push({
-      id: product.id,
-      name: product.title,
-      category: product.category,
-      price: product.price,
-      oldPrice: product.price,
-      quantity: quantity,
-      image: product.thumbnail,
-    });
-  }
-
-  saveCartItems(cartItems);
-
-  toast.success("Product added to cart!");
-};
+  const finalPrice = product.price * quantity;
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -181,19 +228,26 @@ export default function ProductDetailsPage() {
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
           {/* Product Image */}
           <div>
-            <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="relative overflow-hidden rounded-2xl sm:rounded-[2rem] border border-slate-200 bg-white p-4 sm:p-6 shadow-sm">
               {discount > 0 && (
-                <div className="absolute left-6 top-6 z-10 rounded-full bg-red-500 px-4 py-2 text-sm font-bold text-white shadow-lg">
+                <div className="absolute left-4 top-4 sm:left-6 sm:top-6 z-10 rounded-full bg-red-500 px-3 py-1.5 text-xs sm:text-sm font-bold text-white shadow-lg">
                   -{discount}% OFF
                 </div>
               )}
 
+              {/* Wishlist Heart */}
               <button
-                onClick={() => setIsWishlisted(!isWishlisted)}
-                className="absolute right-6 top-6 z-10 flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-lg transition hover:scale-105"
+                type="button"
+                onClick={handleWishlist}
+                className="absolute right-4 top-4 sm:right-6 sm:top-6 z-10 flex h-11 w-11 sm:h-12 sm:w-12 items-center justify-center rounded-full bg-white shadow-lg transition hover:scale-105"
+                aria-label={
+                  isWishlisted
+                    ? "Remove from wishlist"
+                    : "Add to wishlist"
+                }
               >
                 <Heart
-                  size={21}
+                  size={20}
                   className={
                     isWishlisted
                       ? "fill-red-500 text-red-500"
@@ -202,11 +256,19 @@ export default function ProductDetailsPage() {
                 />
               </button>
 
-              <div className="flex min-h-[420px] items-center justify-center rounded-3xl bg-slate-50 p-8">
-                <img
-                  src={product.thumbnail}
+              <div className="flex h-64 sm:h-80 lg:h-96 items-center justify-center rounded-2xl bg-slate-50 p-4 sm:p-8">
+                <Image
+                  src={
+                    product.image ||
+                    product.thumbnail ||
+                    product.images?.[0] ||
+                    ""
+                  }
                   alt={product.title}
-                  className="max-h-[400px] w-full object-contain transition duration-500 hover:scale-105"
+                  width={600}
+                  height={600}
+                  unoptimized
+                  className="h-full w-full object-contain transition duration-500 hover:scale-105"
                 />
               </div>
             </div>
@@ -214,7 +276,11 @@ export default function ProductDetailsPage() {
             {/* Product Benefits */}
             <div className="mt-5 grid grid-cols-3 gap-3">
               <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center">
-                <Truck className="mx-auto mb-2 text-slate-800" size={21} />
+                <Truck
+                  className="mx-auto mb-2 text-slate-800"
+                  size={21}
+                />
+
                 <p className="text-xs font-semibold text-slate-700">
                   Fast Delivery
                 </p>
@@ -225,6 +291,7 @@ export default function ProductDetailsPage() {
                   className="mx-auto mb-2 text-slate-800"
                   size={21}
                 />
+
                 <p className="text-xs font-semibold text-slate-700">
                   Secure Payment
                 </p>
@@ -235,6 +302,7 @@ export default function ProductDetailsPage() {
                   className="mx-auto mb-2 text-slate-800"
                   size={21}
                 />
+
                 <p className="text-xs font-semibold text-slate-700">
                   Easy Returns
                 </p>
@@ -244,12 +312,10 @@ export default function ProductDetailsPage() {
 
           {/* Product Information */}
           <div className="flex flex-col justify-center">
-            {/* Category */}
             <p className="mb-3 text-sm font-bold uppercase tracking-wider text-indigo-600">
               {product.category}
             </p>
 
-            {/* Title */}
             <h1 className="text-3xl font-black leading-tight text-slate-900 sm:text-4xl lg:text-5xl">
               {product.title}
             </h1>
@@ -257,7 +323,10 @@ export default function ProductDetailsPage() {
             {/* Rating */}
             <div className="mt-5 flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-1 rounded-full bg-amber-50 px-3 py-2">
-                <Star size={17} className="fill-amber-400 text-amber-400" />
+                <Star
+                  size={17}
+                  className="fill-amber-400 text-amber-400"
+                />
 
                 <span className="font-bold text-slate-900">
                   {product.rating}
@@ -265,7 +334,10 @@ export default function ProductDetailsPage() {
               </div>
 
               <span className="text-sm text-slate-500">
-                {product.reviews?.length || 0} customer reviews
+                {Array.isArray(product.reviews)
+                  ? product.reviews.length
+                  : 0}{" "}
+                customer reviews
               </span>
 
               <span className="h-1 w-1 rounded-full bg-slate-300" />
@@ -286,12 +358,16 @@ export default function ProductDetailsPage() {
             {/* Price */}
             <div className="mt-7 flex items-end gap-4">
               <span className="text-4xl font-black text-slate-900">
-                ${product.price}
+                ₹{Number(product.price).toLocaleString("en-IN")}
               </span>
 
               {discount > 0 && (
                 <span className="pb-1 text-lg text-slate-400 line-through">
-                  ${(product.price / (1 - discount / 100)).toFixed(2)}
+                  ₹
+                  {Math.round(
+                    product.price /
+                    (1 - discount / 100)
+                  ).toLocaleString("en-IN")}
                 </span>
               )}
             </div>
@@ -335,7 +411,7 @@ export default function ProductDetailsPage() {
                 <span className="text-sm text-slate-500">
                   Total:{" "}
                   <span className="font-bold text-slate-900">
-                    ${finalPrice.toFixed(2)}
+                    ₹{Math.round(finalPrice).toLocaleString("en-IN")}
                   </span>
                 </span>
               </div>
@@ -353,7 +429,7 @@ export default function ProductDetailsPage() {
               </button>
 
               <button
-                onClick={() => setIsWishlisted(!isWishlisted)}
+                onClick={handleWishlist}
                 className="flex items-center justify-center gap-2 rounded-2xl border border-slate-300 bg-white px-6 py-4 font-bold text-slate-800 transition hover:border-slate-900 hover:bg-slate-50"
               >
                 <Heart
@@ -375,6 +451,7 @@ export default function ProductDetailsPage() {
             <div className="mt-8 space-y-3 rounded-2xl border border-slate-200 bg-white p-5">
               <div className="flex items-center gap-3">
                 <Check size={18} className="text-emerald-500" />
+
                 <span className="text-sm text-slate-600">
                   Authentic product guarantee
                 </span>
@@ -382,6 +459,7 @@ export default function ProductDetailsPage() {
 
               <div className="flex items-center gap-3">
                 <Check size={18} className="text-emerald-500" />
+
                 <span className="text-sm text-slate-600">
                   Secure checkout and payment
                 </span>
@@ -389,6 +467,7 @@ export default function ProductDetailsPage() {
 
               <div className="flex items-center gap-3">
                 <Check size={18} className="text-emerald-500" />
+
                 <span className="text-sm text-slate-600">
                   Easy returns available
                 </span>

@@ -2,7 +2,9 @@
 
 import toast from "react-hot-toast";
 import { useState, useEffect } from "react";
-import { getCartItems, saveCartItems } from "../utils/cartUtils";
+import Image from "next/image";
+import { getCartItems, saveCartItems } from "@/utils/cartUtils";
+import { getAuthUser } from "@/utils/storeData";
 import Link from "next/link";
 import {
   Minus,
@@ -15,12 +17,45 @@ import {
   Tag,
 } from "lucide-react";
 
+function CartProductImage({ src, alt }) {
+  const [imageError, setImageError] = useState(false);
+
+  if (!src || imageError) {
+    return <span className="text-3xl">🛍️</span>;
+  }
+
+  return (
+    <Image
+      src={src}
+      alt={alt}
+      width={128}
+      height={128}
+      unoptimized
+      className="h-full w-full object-contain p-2"
+      onError={() => setImageError(true)}
+    />
+  );
+}
+
 export default function CartPage() {
   const [cartItems, setCartItems] = useState([]);
 
+  // Load cart from localStorage
   useEffect(() => {
-    const storedCart = getCartItems();
-    setCartItems(storedCart);
+    const loadCart = () => {
+      const storedCart = getCartItems();
+      setCartItems(Array.isArray(storedCart) ? storedCart : []);
+    };
+
+    loadCart();
+
+    window.addEventListener("cart_changed", loadCart);
+    window.addEventListener("shopeasy_sync", loadCart);
+
+    return () => {
+      window.removeEventListener("cart_changed", loadCart);
+      window.removeEventListener("shopeasy_sync", loadCart);
+    };
   }, []);
 
   // Update product quantity
@@ -54,18 +89,22 @@ export default function CartPage() {
 
   // Calculate subtotal
   const subtotal = cartItems.reduce(
-    (total, item) => total + item.price * item.quantity,
-    0,
+    (total, item) =>
+      total + Number(item.price || 0) * Number(item.quantity || 1),
+    0
   );
 
-  // Discount
-  const discount = cartItems.reduce(
-    (total, item) => total + (item.oldPrice - item.price) * item.quantity,
-    0,
-  );
+  // Calculate discount safely
+  const discount = cartItems.reduce((total, item) => {
+    const oldPrice = Number(item.oldPrice || item.price || 0);
+    const price = Number(item.price || 0);
+    const quantity = Number(item.quantity || 1);
 
-  // Delivery charge
-  const delivery = subtotal >= 3000 ? 0 : 99;
+    return total + Math.max(0, oldPrice - price) * quantity;
+  }, 0);
+
+  // Delivery charge (Free above ₹999)
+  const delivery = subtotal >= 999 ? 0 : 99;
 
   // Final total
   const total = subtotal + delivery;
@@ -94,7 +133,9 @@ export default function CartPage() {
               </h1>
 
               <p className="mt-2 text-slate-500">
-                {cartItems.length} different products in your cart
+                {cartItems.length}{" "}
+                {cartItems.length === 1 ? "product" : "different products"} in
+                your cart
               </p>
             </div>
 
@@ -119,7 +160,7 @@ export default function CartPage() {
             </h2>
 
             <p className="mx-auto mt-2 max-w-md text-slate-500">
-              Looks like you haven't added anything to your cart yet.
+              Looks like you haven&apos;t added anything to your cart yet.
             </p>
 
             <Link
@@ -130,34 +171,33 @@ export default function CartPage() {
             </Link>
           </div>
         ) : (
-          <div className="grid gap-8 lg:grid-cols-[1fr_380px]">
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_380px]">
             {/* Products */}
-            <div className="space-y-5">
+            <div className="min-w-0 space-y-5">
               {cartItems.map((item) => (
                 <article
                   key={item.id}
                   className="group rounded-3xl border border-slate-200 bg-white p-4 shadow-sm transition hover:shadow-md sm:p-6"
                 >
-                  <div className="flex gap-4 sm:gap-6">
+                  <div className="flex min-w-0 gap-4 sm:gap-6">
                     {/* Product Image */}
                     <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-slate-100 sm:h-32 sm:w-32">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="h-full w-full object-contain p-3"
+                      <CartProductImage
+                        src={item.image || item.thumbnail}
+                        alt={item.title || item.name || "Product"}
                       />
                     </div>
 
                     {/* Product Details */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold uppercase tracking-wider text-indigo-600">
+                        <div className="min-w-0">
+                          <p className="truncate text-xs font-bold uppercase tracking-wider text-indigo-600">
                             {item.category}
                           </p>
 
-                          <h2 className="mt-1 text-base font-bold text-slate-900 sm:text-lg">
-                            {item.name}
+                          <h2 className="mt-1 line-clamp-2 text-base font-bold text-slate-900 sm:text-lg">
+                            {item.title || item.name}
                           </h2>
                         </div>
 
@@ -165,7 +205,7 @@ export default function CartPage() {
                         <button
                           type="button"
                           onClick={() => removeItem(item.id)}
-                          className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                          className="shrink-0 rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
                           aria-label={`Remove ${item.name}`}
                         >
                           <Trash2 size={18} />
@@ -173,14 +213,18 @@ export default function CartPage() {
                       </div>
 
                       {/* Price */}
-                      <div className="mt-3 flex items-center gap-2">
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className="text-lg font-black text-slate-900">
-                          ₹{item.price.toLocaleString("en-IN")}
+                          ₹
+                          {Number(item.price || 0).toLocaleString("en-IN")}
                         </span>
 
-                        <span className="text-sm text-slate-400 line-through">
-                          ₹{item.oldPrice.toLocaleString("en-IN")}
-                        </span>
+                        {Number(item.oldPrice || 0) > Number(item.price || 0) && (
+                          <span className="text-sm text-slate-400 line-through">
+                            ₹
+                            {Number(item.oldPrice).toLocaleString("en-IN")}
+                          </span>
+                        )}
                       </div>
 
                       {/* Bottom Row */}
@@ -213,7 +257,10 @@ export default function CartPage() {
                         {/* Item Total */}
                         <p className="text-lg font-black text-slate-900">
                           ₹
-                          {(item.price * item.quantity).toLocaleString("en-IN")}
+                          {(
+                            Number(item.price || 0) *
+                            Number(item.quantity || 1)
+                          ).toLocaleString("en-IN")}
                         </p>
                       </div>
                     </div>
@@ -225,9 +272,11 @@ export default function CartPage() {
               <div className="grid gap-4 sm:grid-cols-3">
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <Truck className="text-indigo-600" size={22} />
+
                   <p className="mt-3 text-sm font-bold text-slate-900">
                     Fast Delivery
                   </p>
+
                   <p className="mt-1 text-xs text-slate-500">
                     Quick & reliable shipping
                   </p>
@@ -235,9 +284,11 @@ export default function CartPage() {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <ShieldCheck className="text-indigo-600" size={22} />
+
                   <p className="mt-3 text-sm font-bold text-slate-900">
                     Secure Payment
                   </p>
+
                   <p className="mt-1 text-xs text-slate-500">
                     100% secure checkout
                   </p>
@@ -245,9 +296,11 @@ export default function CartPage() {
 
                 <div className="rounded-2xl border border-slate-200 bg-white p-4">
                   <Tag className="text-indigo-600" size={22} />
+
                   <p className="mt-3 text-sm font-bold text-slate-900">
                     Great Deals
                   </p>
+
                   <p className="mt-1 text-xs text-slate-500">
                     Best prices guaranteed
                   </p>
@@ -288,7 +341,7 @@ export default function CartPage() {
                   </div>
 
                   <div className="border-t border-dashed border-slate-200 pt-4">
-                    <div className="flex items-end justify-between">
+                    <div className="flex items-end justify-between gap-3">
                       <div>
                         <p className="text-sm text-slate-500">Total</p>
 
@@ -304,7 +357,6 @@ export default function CartPage() {
                   </div>
                 </div>
 
-                {/* Checkout */}
                 <Link
                   href="/checkout"
                   className="mt-7 flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3.5 font-bold text-white shadow-lg shadow-indigo-200 transition hover:-translate-y-0.5 hover:shadow-xl"

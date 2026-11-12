@@ -1,8 +1,13 @@
+
 "use client";
 
 import Link from "next/link";
-import { useState, useEffect} from "react";
+import Image from "next/image";
 import toast from "react-hot-toast";
+import { getAuthUser } from "@/utils/storeData";
+import { getWishlistItems, saveWishlistItems, getCartItems, saveCartItems } from "@/utils/cartUtils";
+import { useRouter } from "next/navigation";
+import { useStoreSnapshot } from "@/hooks/useStoreSnapshot";
 import {
   ArrowLeft,
   Heart,
@@ -13,89 +18,90 @@ import {
 } from "lucide-react";
 
 export default function WishlistPage() {
-  const [wishlistItems, setWishlistItems] = useState([
-    {
-      id: 1,
-      name: "Premium Wireless Headphones",
-      category: "Electronics",
-      price: 2499,
-      oldPrice: 3999,
-      rating: 4.8,
-      reviews: 124,
-      image: "🎧",
-    },
-    {
-      id: 2,
-      name: "Classic Casual Sneakers",
-      category: "Fashion",
-      price: 1899,
-      oldPrice: 2999,
-      rating: 4.7,
-      reviews: 89,
-      image: "👟",
-    },
-    {
-      id: 3,
-      name: "Smart Watch Series X",
-      category: "Electronics",
-      price: 3299,
-      oldPrice: 4999,
-      rating: 4.9,
-      reviews: 216,
-      image: "⌚",
-    },
+  const router = useRouter();
+  const user = useStoreSnapshot(getAuthUser, null, ["auth_changed"]);
+  const storedWishlistItems = useStoreSnapshot(getWishlistItems, [], [
+    "wishlist_changed",
+    "auth_changed",
   ]);
-  const removeFromWishlist = (id) => {
-  setWishlistItems((items) => {
-    const updatedWishlist = items.filter((item) => item.id !== id);
+  const wishlistItems =
+    user?.role === "user" ? storedWishlistItems : [];
 
-    localStorage.setItem(
-      "wishlistItems",
-      JSON.stringify(updatedWishlist)
+  const saveWishlist = (items) => {
+    saveWishlistItems(items);
+  };
+
+  // Remove product
+  const removeFromWishlist = (id) => {
+    const updatedWishlist = wishlistItems.filter(
+      (item) => item.id !== id
     );
 
-    return updatedWishlist;
-  });
+    saveWishlist(updatedWishlist);
+    toast.success("Product removed from wishlist!");
+  };
 
-  toast.success("Removed from wishlist!");
-};
+  // Move a wishlist item into the current customer's cart.
   const moveToCart = (item) => {
-  const savedCart = localStorage.getItem("cart");
+    const user = getAuthUser();
+    if (!user || user.role !== "user") {
+      toast.error("Please login as a customer first.");
+      router.push("/login/customer");
+      return;
+    }
+    try {
+      const cartItems = getCartItems();
+      const existing = cartItems.find((cartItem) => String(cartItem.id) === String(item.id));
+      const updatedCart = existing
+        ? cartItems.map((cartItem) => String(cartItem.id) === String(item.id)
+            ? { ...cartItem, quantity: Number(cartItem.quantity || 1) + 1 }
+            : cartItem)
+        : [...cartItems, {
+            id: item.id,
+            name: item.name || item.title,
+            category: typeof item.category === "string" ? item.category : item.category?.name || "",
+            price: item.price,
+            oldPrice: item.oldPrice || item.price,
+            quantity: 1,
+            image: item.image || item.thumbnail || "",
+          }];
+      saveCartItems(updatedCart);
+      saveWishlist(wishlistItems.filter((wishlistItem) => String(wishlistItem.id) !== String(item.id)));
+      toast.success("Product moved to cart!");
+    } catch (error) {
+      console.error("Cart update failed:", error);
+      toast.error("Unable to move product to cart.");
+    }
+  };
 
-  const cartItems = savedCart ? JSON.parse(savedCart) : [];
+  // Safely get rating
+  const getRating = (item) => {
+    if (typeof item.rating === "number") {
+      return item.rating.toFixed(1);
+    }
 
-  const existingItem = cartItems.find(
-    (cartItem) => cartItem.id === item.id
-  );
+    if (
+      item.rating &&
+      typeof item.rating === "object"
+    ) {
+      return item.rating.rate ?? item.rating.rating ?? "N/A";
+    }
 
-  if (existingItem) {
-    existingItem.quantity += 1;
-  } else {
-    cartItems.push({
-      ...item,
-      quantity: 1,
-    });
-  }
+    return "N/A";
+  };
 
-  localStorage.setItem("cart", JSON.stringify(cartItems));
+  // Safely get review count
+  const getReviewCount = (item) => {
+    if (Array.isArray(item.reviews)) {
+      return item.reviews.length;
+    }
 
-  removeFromWishlist(item.id);
+    if (typeof item.reviews === "number") {
+      return item.reviews;
+    }
 
-  toast.success("Product moved to cart!");
-};
-  useEffect(() => {
-  const savedWishlist = localStorage.getItem("wishlistItems");
-
-  if (savedWishlist) {
-    setWishlistItems(JSON.parse(savedWishlist));
-  }
-}, []);
-useEffect(() => {
-  localStorage.setItem(
-    "wishlistItems",
-    JSON.stringify(wishlistItems)
-  );
-}, [wishlistItems]);
+    return 0;
+  };
 
   return (
     <main className="min-h-screen bg-slate-50">
@@ -104,7 +110,7 @@ useEffect(() => {
         <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
           <Link
             href="/products"
-            className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-indigo-600"
+            className="mb-5 inline-flex items-center gap-2 text-sm font-semibold text-slate-500 transition hover:text-violet-600"
           >
             <ArrowLeft size={17} />
             Continue Shopping
@@ -156,7 +162,7 @@ useEffect(() => {
 
             <Link
               href="/products"
-              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-indigo-600"
+              className="mt-7 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-6 py-3.5 text-sm font-bold text-white transition hover:bg-violet-600"
             >
               Explore Products
               <ArrowRight size={17} />
@@ -172,33 +178,47 @@ useEffect(() => {
                   className="group overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl"
                 >
                   {/* Product Image */}
-                  <div className="relative flex h-64 items-center justify-center bg-gradient-to-br from-slate-100 via-white to-indigo-50">
-                    <div className="text-7xl transition duration-300 group-hover:scale-110">
-                      {item.image}
-                    </div>
+                  <div className="relative flex h-64 items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-white to-violet-50">
+                    {item.image ? (
+                      <Image
+                        src={item.image}
+                        alt={item.name || "Product"}
+                        width={600}
+                        height={600}
+                        unoptimized
+                        className="h-full w-full object-contain p-8 transition duration-300 group-hover:scale-105"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                    ) : (
+                      <span className="text-7xl">🛍️</span>
+                    )}
 
                     <button
                       type="button"
                       onClick={() => removeFromWishlist(item.id)}
                       className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white/90 text-rose-500 shadow-sm backdrop-blur transition hover:bg-rose-50"
-                      aria-label={`Remove ${item.name} from wishlist`}
+                      aria-label="Remove from wishlist"
                     >
                       <Trash2 size={17} />
                     </button>
 
-                    <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm backdrop-blur">
+                    <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1.5 text-xs font-bold text-slate-700 shadow-sm">
                       Saved
                     </span>
                   </div>
 
                   {/* Product Information */}
                   <div className="p-5">
-                    <p className="text-xs font-bold uppercase tracking-wider text-indigo-500">
-                      {item.category}
+                    <p className="text-xs font-bold uppercase tracking-wider text-violet-500">
+                      {typeof item.category === "string"
+                        ? item.category
+                        : item.category?.name || "General"}
                     </p>
 
                     <h2 className="mt-2 line-clamp-2 min-h-[48px] text-lg font-black text-slate-900">
-                      {item.name}
+                      {item.name || item.title || "Untitled Product"}
                     </h2>
 
                     {/* Rating */}
@@ -209,25 +229,29 @@ useEffect(() => {
                           className="text-amber-500"
                           fill="currentColor"
                         />
+
                         <span className="text-xs font-bold text-amber-700">
-                          {item.rating}
+                          {getRating(item)}
                         </span>
                       </div>
 
                       <span className="text-xs text-slate-400">
-                        ({item.reviews} reviews)
+                        ({getReviewCount(item)} reviews)
                       </span>
                     </div>
 
                     {/* Price */}
                     <div className="mt-4 flex items-center gap-3">
                       <span className="text-2xl font-black text-slate-900">
-                        ₹{item.price.toLocaleString("en-IN")}
+                        ₹{Number(item.price || 0).toLocaleString("en-IN")}
                       </span>
 
-                      <span className="text-sm text-slate-400 line-through">
-                        ₹{item.oldPrice.toLocaleString("en-IN")}
-                      </span>
+                      {Number(item.oldPrice || 0) >
+                        Number(item.price || 0) && (
+                        <span className="text-sm text-slate-400 line-through">
+                          ₹{Number(item.oldPrice).toLocaleString("en-IN")}
+                        </span>
+                      )}
                     </div>
 
                     {/* Actions */}
@@ -235,7 +259,7 @@ useEffect(() => {
                       <button
                         type="button"
                         onClick={() => moveToCart(item)}
-                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-indigo-600"
+                        className="flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-3 text-sm font-bold text-white transition hover:bg-violet-600"
                       >
                         <ShoppingBag size={17} />
                         Move to Cart
@@ -243,8 +267,8 @@ useEffect(() => {
 
                       <Link
                         href={`/products/${item.id}`}
-                        className="flex items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
-                        aria-label={`View ${item.name}`}
+                        className="flex items-center justify-center rounded-xl border border-slate-200 px-4 py-3 text-slate-600 transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-600"
+                        aria-label="View product"
                       >
                         <ArrowRight size={18} />
                       </Link>
@@ -255,12 +279,13 @@ useEffect(() => {
             </div>
 
             {/* Bottom Info */}
-            <div className="mt-8 flex flex-col justify-between gap-4 rounded-2xl border border-indigo-100 bg-indigo-50 p-5 sm:flex-row sm:items-center">
+            <div className="mt-8 flex flex-col justify-between gap-4 rounded-2xl border border-violet-100 bg-violet-50 p-5 sm:flex-row sm:items-center">
               <div>
-                <p className="text-sm font-bold text-indigo-900">
+                <p className="text-sm font-bold text-violet-900">
                   Keep your favorites close
                 </p>
-                <p className="mt-1 text-xs text-indigo-700">
+
+                <p className="mt-1 text-xs text-violet-700">
                   Move your saved products to the cart whenever you&apos;re
                   ready to purchase.
                 </p>
@@ -268,7 +293,7 @@ useEffect(() => {
 
               <Link
                 href="/products"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-indigo-700 shadow-sm transition hover:bg-indigo-600 hover:text-white"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-violet-600 hover:text-white"
               >
                 Browse More
                 <ArrowRight size={16} />
