@@ -19,7 +19,7 @@ The application includes product discovery, shopping cart management, wishlist f
 ## 🔗 Project Links
 
 - **GitHub Repository:** [ShopEasy – E-Commerce Project](https://github.com/chaitu-pixel/ShopEasy_E-commerce)
-- **Live Demo:** Coming Soon
+- **Live Demo:** https://shopeasye-commerce.vercel.app/
 
 ---
 
@@ -497,6 +497,7 @@ B.Tech Graduate | Data Science
 
 - **GitHub:** [chaitu-pixel](https://github.com/chaitu-pixel)
 - **Project Repository:** [ShopEasy E-Commerce](https://github.com/chaitu-pixel/ShopEasy_E-commerce)
+- **Live deployment:** https://shopeasye-commerce.vercel.app/
 
 ---
 
